@@ -73,9 +73,13 @@ export function normalizeEvent(e,sport,at=Date.now()){
   const bid=prob(m.bestBidQuote),ask=prob(m.bestAskQuote);const mid=bid!==null&&ask!==null&&bid<=ask?(bid+ask)/2:null;
   const outcomes=sides.map(x=>({name:x.description||x.team?.name||'Unknown',teamId:String(x.teamId??''),long:x.long,probability:mid===null?null:x.long?mid:1-mid,quote:prob(x.quote),tradable:x.tradable===true}));
   const favorite=outcomes.length===2&&outcomes.every(o=>o.probability!==null)?outcomes.reduce((a,b)=>a.probability>=b.probability?a:b):null;
-  const suspended=/SUS|POSTP|CANCEL|DELAY/i.test(e.period||e.eventState?.period||'');
-  const open=m.status==='MARKET_STATUS_OPEN'&&m.active===true&&m.closed===false&&e.closed!==true&&e.ended!==true&&!suspended;
-  results.push({id:String(m.id),eventId:String(e.id),slug:m.slug,eventSlug:e.slug,title:e.title,sport:sp.slug,sportName:sp.name,league:e.eventState?.tennisState?.tournamentName||tag.league?.name||e.seriesSlug||sp.name,start:Number.isFinite(stamp)?stamp:null,live:e.live===true&&e.ended!==true&&!suspended,ended:e.ended===true,suspended,open,status:suspended?'Suspended':m.status?.replace('MARKET_STATUS_','')||'Unknown',type,supported,outcomes,favorite,spread:mid===null?null:ask-bid,liquidity:null,depth:null,comboEnabled:m.comboEnabled===true,verifiedAt:0,fetchedAt:at,venue:'us',url:`https://polymarket.us/event/${encodeURIComponent(e.slug)}`,research:null});
+  const period=e.period||e.eventState?.period||'';
+  const suspended=/SUS|POSTP|CANCEL|DELAY/i.test(period);
+  const live=e.live===true||e.eventState?.live===true;
+  const ended=e.ended===true||e.eventState?.ended===true;
+  const notStarted=e.live===false&&e.ended===false&&!live&&!ended&&/^(NS|NOT_STARTED|SCHEDULED)?$/i.test(period);
+  const open=m.status==='MARKET_STATUS_OPEN'&&m.active===true&&m.closed===false&&e.closed!==true&&!ended&&!suspended;
+  results.push({id:String(m.id),eventId:String(e.id),slug:m.slug,eventSlug:e.slug,title:e.title,sport:sp.slug,sportName:sp.name,league:e.eventState?.tennisState?.tournamentName||tag.league?.name||e.seriesSlug||sp.name,start:Number.isFinite(stamp)?stamp:null,live:live&&!ended&&!suspended,ended,notStarted,suspended,open,status:suspended?'Suspended':m.status?.replace('MARKET_STATUS_','')||'Unknown',type,supported,outcomes,favorite,spread:mid===null?null:ask-bid,liquidity:null,depth:null,comboEnabled:m.comboEnabled===true,verifiedAt:0,fetchedAt:at,venue:'us',url:`https://polymarket.us/event/${encodeURIComponent(e.slug)}`,research:null});
  }
  return results;
 }
@@ -88,36 +92,53 @@ export function applyBbo(m,response,at=Date.now()){
  m.spread=ask-bid;m.depth={bid:amount(b.bidShares),ask:amount(b.askShares)};m.liquidity=null;
  m.open=m.open&&b.state==='MARKET_STATE_OPEN';m.verifiedAt=at;m.bookState=b.state;return m;
 }
-export function filteredMarkets(markets,{sport='all',window='180',search='',lopsided=false,min=.75,max=.88}={},now=Date.now()){
- return markets.filter(m=>m.open&&(sport==='all'||m.sport===sport||m.league===sport)&&(!search||`${m.title} ${m.outcomes.map(o=>o.name).join(' ')}`.toLowerCase().includes(search.toLowerCase()))&&(window==='live'?m.live:!m.live&&m.start!==null&&m.start>=now&&(window==='all'||m.start<=now+Number(window)*60000))&&(!lopsided||(m.favorite&&m.favorite.probability>=min&&m.favorite.probability<=max))).sort((a,b)=>(a.start??Infinity)-(b.start??Infinity));
+// Tennis schedules slip. A past timestamp alone is not evidence that play started.
+// These remain separately labeled; never invent a replacement scheduled start.
+export function awaitingStart(m,now=Date.now()){
+ return m.open&&!m.live&&!m.ended&&!m.suspended&&m.notStarted===true&&Number.isFinite(m.start)&&m.start<=now&&now-m.start<=12*3600000;
+}
+export function marketTimeOrder(a,b,now=Date.now()){
+ const rank=m=>awaitingStart(m,now)?Math.abs(m.start-now):m.start===null?Infinity:Math.max(0,m.start-now);
+ return rank(a)-rank(b)||String(a.id).localeCompare(String(b.id));
+}
+export function filteredMarkets(markets,{sport='all',window='180',search='',lopsided=false,min=.75,max=.88,includeAwaiting=true}={},now=Date.now()){
+ return markets.filter(m=>m.open&&(sport==='all'||m.sport===sport||m.league===sport)&&(!search||`${m.title} ${m.outcomes.map(o=>o.name).join(' ')}`.toLowerCase().includes(search.toLowerCase()))&&(window==='live'?m.live:!m.live&&m.start!==null&&((m.start>=now&&(window==='all'||m.start<=now+Number(window)*60000))||(includeAwaiting&&awaitingStart(m,now))))&&(!lopsided||(m.favorite&&m.favorite.probability>=min&&m.favorite.probability<=max))).sort((a,b)=>marketTimeOrder(a,b,now));
 }
 export function eligibility(m,{now=Date.now(),maxSpread=.08,minDepth=0,requireResearch=false}={}){
  if(!m.supported)return 'Not a verified two-competitor full-match winner market';
  if(!m.open)return 'Market is not open';if(!m.comboEnabled)return 'Native combo eligibility is not confirmed';
- if(m.start===null||(!m.live&&m.start<=now))return 'Start time missing or passed';
- if(!m.verifiedAt||now-m.verifiedAt>90000)return 'Order book needs refreshing';
+ if(m.start===null||(!m.live&&m.start<=now&&!awaitingStart(m,now)))return 'Start time missing, stale, or start status unconfirmed';
+ if(!m.verifiedAt||now-m.verifiedAt>90000)return m.bookError?'Order book unavailable: '+m.bookError:'Order book needs refreshing';
  if(m.spread===null||m.spread>maxSpread)return 'Spread exceeds filter';
  if(!m.favorite?.quote||m.outcomes.some(o=>!o.tradable))return 'Missing tradable quote';
  if(minDepth>0&&(m.depth?.bid==null||m.depth?.ask==null||Math.min(m.depth.bid,m.depth.ask)<minDepth))return 'Order-book depth below filter';
  if(requireResearch&&!m.research?.supported)return 'Independent research is unavailable';return null;
 }
+export function comboDiagnostics(markets,options={}){
+ const rejected={},eligible=[];
+ for(const m of markets){const reason=eligibility(m,options);if(reason)rejected[reason]=(rejected[reason]||0)+1;else eligible.push(m);}
+ return {total:markets.length,eligible,rejected};
+}
 export function buildCombos(markets,target,options={}){
  if(![2,3,4,5].includes(Number(target)))throw new Error('Choose a 2×–5× target.');
- const maxLegs=Math.min(6,Math.max(2,options.maxLegs||6));
- const candidates=markets.filter(m=>!eligibility(m,options)).sort((a,b)=>Number(!!b.research?.supported)-Number(!!a.research?.supported)||(a.start-b.start)).slice(0,40);
- let beam=[{legs:[],product:1,events:[],teams:[],score:0}]; const found=[];
- for(let n=0;n<candidates.length;n++){
-  const m=candidates[n], newStates=[];
+ const maxLegs=Math.min(6,Math.max(2,options.maxLegs||6)),now=options.now||Date.now();
+ const candidates=markets.filter(m=>!eligibility(m,options)).sort((a,b)=>Number(!!b.research?.supported)-Number(!!a.research?.supported)||marketTimeOrder(a,b,now)).slice(0,40);
+ let beam=[{legs:[],product:1,events:[],teams:[],score:0}]; const found=[],nearest=[];
+ for(const m of candidates){
+  const newStates=[];
   for(const c of beam){if(c.legs.length>=maxLegs||c.events.includes(m.eventId)||m.outcomes.some(o=>c.teams.includes(o.teamId))||c.legs.some(l=>l.venue!==m.venue))continue;
-   const product=c.product/m.favorite.quote;if(product>target*1.25)continue;
+   const product=c.product/m.favorite.quote;
    const q={legs:[...c.legs,m],product,events:[...c.events,m.eventId],teams:[...c.teams,...m.outcomes.map(o=>o.teamId)],score:0};
    q.score=Math.abs(Math.log(product/target))+.012*q.legs.length+.02*q.legs.filter(x=>!x.research?.supported).length;
-   if(q.legs.length>=2&&Math.abs(product/target-1)<=.15)found.push(q);
-   newStates.push(q);
+   if(q.legs.length>=2){nearest.push(q);if(Math.abs(product/target-1)<=.15)found.push(q);}
+   // Once over target, adding legs can only increase the multiplier. Retain the
+   // complete ticket as a labeled nearest alternative, but stop extending it.
+   if(product<=target*1.15)newStates.push(q);
   }
   beam=[...beam,...newStates].sort((a,b)=>a.score-b.score).slice(0,700);
  }
- const seen=new Set();return found.sort((a,b)=>a.score-b.score).filter(c=>{const k=c.legs.map(x=>x.id).sort().join('|');if(seen.has(k))return false;seen.add(k);return true;}).slice(0,3).map(c=>({id:uid(),at:iso(),target:Number(target),multiplier:c.product,implied:c.legs.reduce((p,m)=>p*m.favorite.probability,1),legs:c.legs.map(m=>({...m,selection:m.favorite.name,selectedLong:m.favorite.long,quote:m.favorite.quote})),placed:false}));
+ const source=found.length?found:options.allowNearest?nearest:[];
+ const seen=new Set();return source.sort((a,b)=>a.score-b.score).filter(c=>{const k=c.legs.map(x=>x.id).sort().join('|');if(seen.has(k))return false;seen.add(k);return true;}).slice(0,3).map(c=>({id:uid(),at:iso(),target:Number(target),targetMatched:Math.abs(c.product/target-1)<=.15,multiplier:c.product,implied:c.legs.reduce((p,m)=>p*m.favorite.probability,1),legs:c.legs.map(m=>({...m,selection:m.favorite.name,selectedLong:m.favorite.long,quote:m.favorite.quote})),placed:false}));
 }
 export function ocrFields(text){
  const get=re=>{const m=text.match(re);return m?Number(m[1].replace(/,/g,'')):null;};

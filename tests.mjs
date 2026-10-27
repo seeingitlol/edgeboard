@@ -43,3 +43,62 @@ test('backup restore rejects unsafe identifiers, URLs and malformed dates',()=>{
  const bad=E.initialState();bad.goals[0].id='x" onclick="alert(1)';assert.throws(()=>E.validateBackup(bad));
  const bad2=E.initialState();bad2.combos=[{id:'valid',url:'javascript:alert(1)'}];assert.throws(()=>E.validateBackup(bad2));
 });
+test('reported Haile, Marmorstein and Tikhonova matches remain visible awaiting start',async()=>{
+ const {readFile}=await import('node:fs/promises');const f=JSON.parse(await readFile(new URL('./fixtures/tennis-awaiting-start.json',import.meta.url),'utf8'));const now=Date.parse(f.observedAt);
+ const rows=f.events.flatMap(e=>E.normalizeEvent(e,{slug:'tennis',name:'Tennis'},now));
+ assert.equal(rows.length,3);assert.ok(rows.every(m=>m.start<now&&!m.live&&m.open));
+ assert.equal(E.filteredMarkets(rows,{sport:'tennis',window:'15'},now).length,3);
+ assert.equal(E.filteredMarkets(rows,{sport:'tennis',window:'15',includeAwaiting:false},now).length,0);
+ assert.ok(rows.every(m=>E.awaitingStart(m,now)));
+ for(const m of rows){m.verifiedAt=now;assert.equal(E.eligibility(m,{now}),null);}
+});
+test('awaiting-start exception never turns unknown, live, ended, suspended or old events into upcoming games',()=>{
+ const now=Date.now(),base={...market(1),start:now-300000,live:false,ended:false,notStarted:true};
+ assert.equal(E.awaitingStart(base,now),true);
+ for(const patch of [{notStarted:false},{live:true},{ended:true},{suspended:true},{open:false},{start:now-13*3600000}])assert.equal(E.awaitingStart({...base,...patch},now),false,JSON.stringify(patch));
+ assert.equal(E.filteredMarkets([{...base,live:true}],{window:'15'},now).length,0);
+ assert.equal(E.filteredMarkets([{...base,live:true}],{window:'live'},now).length,1);
+ assert.notEqual(E.eligibility({...base,notStarted:false},{now}),null);
+});
+test('eventState live or ended flags override contradictory top-level pre-match flags',()=>{
+ const e={...event(),live:false,ended:false,startTime:new Date(Date.now()-600000).toISOString()};
+ e.eventState={live:true,ended:false,period:'S1'};let m=E.normalizeEvent(e)[0];assert.equal(m.live,true);assert.equal(m.notStarted,false);
+ e.eventState={live:false,ended:true};m=E.normalizeEvent(e)[0];assert.equal(m.open,false);assert.equal(m.ended,true);
+});
+test('nearest combo is explicitly outside target and cannot bypass eligibility or correlation checks',()=>{
+ const a=market(1,.55),b=market(2,.55);assert.equal(E.buildCombos([a,b],2).length,0);
+ const near=E.buildCombos([a,b],2,{allowNearest:true});assert.equal(near.length,1);assert.equal(near[0].targetMatched,false);assert.ok(near[0].multiplier>3);
+ b.eventId=a.eventId;assert.equal(E.buildCombos([a,b],2,{allowNearest:true}).length,0);
+ b.eventId='different';b.verifiedAt=0;assert.equal(E.buildCombos([a,b],2,{allowNearest:true}).length,0);
+});
+test('valid target after first twelve candidates is searched',()=>{
+ const first=Array.from({length:12},(_,i)=>market('early'+i,.51)),later=[market('late1',.72),market('late2',.7)];later.forEach(m=>m.start+=60000);
+ assert.equal(E.buildCombos(first,2).length,0);const result=E.buildCombos([...first,...later],2);assert.ok(result.length);assert.ok(result.every(c=>c.targetMatched));
+});
+test('diagnostics distinguish research, quote, spread and duplicate eligibility failures',()=>{
+ const a=market(1),b=market(2),c=market(3);a.verifiedAt=0;a.bookError='HTTP 503';b.spread=.2;
+ const d=E.comboDiagnostics([a,b,c],{requireResearch:true});assert.equal(d.eligible.length,0);assert.equal(Object.values(d.rejected).reduce((a,b)=>a+b,0),3);assert.ok(Object.keys(d.rejected).some(x=>x.includes('503')));assert.equal(d.rejected['Independent research is unavailable'],1);
+});
+async function uiHarness(api){
+ const {readFile}=await import('node:fs/promises');const {runInNewContext}=await import('node:vm');
+ const nodes=new Map();const values={'#combo-stake':'5','#max-legs':'6','#max-spread':'8','#min-depth':'0'};
+ const document={querySelector:selector=>{if(!nodes.has(selector))nodes.set(selector,{innerHTML:'',textContent:'',value:values[selector]||'',checked:false,classList:{add(){},remove(){}},showModal(){},addEventListener(){}});return nodes.get(selector);},addEventListener(){},querySelectorAll:()=>[]};
+ const context={E,S:{save:async()=>{},write:async()=>{}},MarketAPI,ResearchAPI,document,window:{addEventListener(){}},location:{hash:'#combos'},console,Date,Intl,Map,Set,Math,Number,String,Array,Object,Promise,AbortController,structuredClone,setTimeout:()=>1,clearTimeout(){}};
+ const source=(await readFile(new URL('./app.js',import.meta.url),'utf8')).replace(/^import .*;\n/gm,'').replace(/void init\(\);\s*$/,'');
+ runInNewContext(source+'\nthis.uiTest={scan,generate,setContext:(a)=>{state=E.initialState();api=a;research={research:async()=>({available:false,supported:false,summary:"Unavailable"})};catalog=[{slug:"tennis",name:"Tennis"},{slug:"basketball",name:"Basketball"}];filters.sport="tennis";filters.window="15";},sport:s=>filters.sport=s,snapshot:()=>({markets,combos,comboFeedback,loadedSport,scanning})};',context);
+ context.uiTest.setContext(api);return {ui:context.uiTest,nodes};
+}
+test('Generate waits for the selected sport second page and reuses the active scan',async()=>{
+ let release;const gate=new Promise(r=>release=r);let scans=0,verifications=0;
+ const a={...market(1),sport:'tennis'},b={...market(2),sport:'tennis'};
+ const api={scan:async({onPage})=>{scans++;onPage([a]);await gate;onPage([b]);return {total:2,errors:[],truncated:[]};},verify:async()=>{verifications++;return [];}};
+ const {ui}=await uiHarness(api);const scanning=ui.scan();const generating=ui.generate();
+ await new Promise(r=>setImmediate(r));assert.equal(verifications,0,'must not generate from incomplete page');assert.equal(scans,1,'must not abort and restart the scan');
+ release();await scanning;await generating;assert.equal(ui.snapshot().markets.length,2);assert.ok(ui.snapshot().combos.length);assert.equal(scans,1);
+});
+test('late callbacks from cancelled sport scans cannot overwrite the selected sport',async()=>{
+ let release;const gate=new Promise(r=>release=r);
+ const api={scan:async({sport,onPage})=>{if(sport==='tennis')await gate;onPage([{...market(sport),sport}]);return {total:1,errors:[],truncated:[]};}};
+ const {ui}=await uiHarness(api);const old=ui.scan();ui.sport('basketball');await ui.scan();release();await old;
+ assert.equal(ui.snapshot().loadedSport,'basketball');assert.deepEqual(Array.from(ui.snapshot().markets,m=>m.sport),['basketball']);
+});

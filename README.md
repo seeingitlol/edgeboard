@@ -2,10 +2,10 @@
 
 A private-on-device sports combo workspace for Polymarket US. Discover real markets, construct candidate native-combo tickets, and track only wagers and money you explicitly confirm.
 
-**Deployment target:** https://seeingitlol.github.io/edgeboard/  
+**Live application:** https://seeingitlol.github.io/edgeboard/  
 **Repository:** https://github.com/seeingitlol/edgeboard
 
-Check [TESTING.md](TESTING.md) for deployment status and verified versus unverified integrations. A repository URL or deployment target alone is not evidence that the site is live.
+Check [TESTING.md](TESTING.md) for deployment status and verified versus unverified integrations. The original Pages deployment was verified on October 27, 2026; see the report for the latest patch verification limits.
 
 ## Using the app
 
@@ -16,6 +16,8 @@ Check [TESTING.md](TESTING.md) for deployment status and verified versus unverif
 5. Return to **My Bets**, upload your screenshot, correct OCR fields and selections, then confirm the real wager. Confirm received settlement separately.
 6. Record actual savings transfers under **Goals**. The expected $900 payment on November 5, 2026 remains separate and unreceived until confirmed.
 
+Open matches whose scheduled time has elapsed can appear in a separate **Awaiting start** section when the feed explicitly still reports not live/not ended. The window filter does not invent a new start time. Disable the awaiting-start toggle for strict future-only results. Awaiting entries older than 12 hours, suspended matches and unknown lifecycle states stay excluded. Fresh quotes are still required for every combo leg.
+
 No trading credentials are requested and no wager is ever submitted by this app.
 
 ## Included
@@ -23,7 +25,7 @@ No trading credentials are requested and no wager is ever submitted by this app.
 - Dynamic US sports catalog, paginated events, progressive display, duplicate protection, time/search/sport filters, Pacific timestamps and open-market checks.
 - Complementary midpoint probabilities distinguished from executable long/short buying quotes. Spread and available share depth are shown honestly; dollar liquidity is unavailable in the selected feeds.
 - Two-competitor full-match winner validation. Three-way soccer/Yes-No props remain browsable but are excluded from two-outcome combo construction.
-- 2–6 leg combo search, 2×–5× targets, alternatives, stale-book rejection, duplicate/shared-team exclusions, research-required toggle and manual native-ticket handoff.
+- 2–6 leg combo search over up to 40 verified candidates, 2×–5× targets, labeled nearest alternatives, stale-book rejection, duplicate/shared-team exclusions, research-required toggle and manual native-ticket handoff.
 - Local OCR, editable confirmation, IndexedDB wager/image storage, receipt accounting, branch reservations, goals, JSON restore/export and CSV export.
 - Bankroll chart, daily/weekly realized P/L, performance by sport/target/leg count and streaks.
 - Secure optional Cloudflare Worker + Apps Script snapshot synchronization, retry queue, acknowledgment and stale-revision rejection.

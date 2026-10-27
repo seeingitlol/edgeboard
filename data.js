@@ -36,7 +36,7 @@ export class MarketAPI {
    }
   }));return {total,errors,truncated};
  }
- async verify(markets,signal){let i=0;const errors=[];await Promise.all(Array.from({length:Math.min(3,markets.length)},async()=>{while(i<markets.length){const m=markets[i++];try{const d=await this.request(`/v1/markets/${encodeURIComponent(m.slug)}/bbo`,{signal});applyBbo(m,d);}catch(e){if(signal?.aborted)throw e;m.verifiedAt=0;errors.push(`${m.title}: ${e.message}`);}await pause(150);}}));return errors;}
+ async verify(markets,signal){let i=0;const errors=[];await Promise.all(Array.from({length:Math.min(3,markets.length)},async()=>{while(i<markets.length){const m=markets[i++];try{const d=await this.request(`/v1/markets/${encodeURIComponent(m.slug)}/bbo`,{signal});applyBbo(m,d);delete m.bookError;}catch(e){if(signal?.aborted)throw e;m.verifiedAt=0;m.bookError=e.message;errors.push(`${m.title}: ${e.message}`);}await pause(150);}}));return errors;}
  async settlements(bet){const results={};const errors=[];for(const l of bet.legs){if(!l.slug)continue;try{const d=await this.request(`/v1/markets/${encodeURIComponent(l.slug)}/settlement`);if(typeof d.settlement==='number')results[l.slug]=d.settlement;}catch(e){errors.push(e.message);}}return {estimate:settlementEstimate(bet.legs,bet.potential,results),errors,at:Date.now()};}
 }
 const normalize=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
