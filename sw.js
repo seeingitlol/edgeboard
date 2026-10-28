@@ -1,4 +1,4 @@
-const CACHE='edgeboard-shell-v2';
+const CACHE='edgeboard-shell-v2-violet-1';
 const SHELL=['./','./index.html','./styles.css','./app.js','./engine.js','./data.js','./store.js','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL))));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('edgeboard-shell-')&&k!==CACHE).map(k=>caches.delete(k))))));

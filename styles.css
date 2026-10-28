@@ -7,3 +7,35 @@
 @media(prefers-reduced-motion:reduce){*{animation:none!important;scroll-behavior:auto!important}}
 
 .mini-bar{height:4px;background:var(--border);border-radius:4px;margin:5px 0 9px;overflow:hidden}.mini-bar i{display:block;height:100%;background:var(--green)}
+
+/* Edgeboard violet / blue theme. Visual changes only. */
+:root{--bg:#090c14;--panel:#191c28;--panel2:#242737;--border:#36384b;--muted:#b3b6ce;--text:#fafaff;--green:#b7b4ff;--good:#82e6bb;--bad:#ff94a8;--amber:#f4d39b;--radius:26px}
+body{background:radial-gradient(ellipse at 80% 0,rgba(103,52,166,.12),transparent 40%),#090c14}
+header{background:rgba(11,14,23,.94);border-color:#272a3a}
+.brand-mark{color:white;background:linear-gradient(135deg,#5979ff,#b454e2);box-shadow:0 0 25px #7660ff25}
+.brand-dot{color:#b6a2ff}.venue i,.status-dot{background:#a998ff}
+aside{border-color:#272a3a}nav a.active{background:linear-gradient(110deg,#343e70,#45305d);color:#f3efff}
+button{border-color:#414357;background:#252837;border-radius:15px}button:hover{background:#35364c}
+.primary,.chips button.selected{color:white;border-color:#8c82ec;background:linear-gradient(115deg,#4262cf,#7944b3);box-shadow:inset 0 1px 0 #ffffff25,0 6px 22px #6950d523}
+.primary:hover{background:linear-gradient(115deg,#5375e1,#9256ca);border-color:#b4a1ff}.primary:disabled{color:#fff}
+.card,.stat{background:linear-gradient(145deg,#202330,#181b26);border-color:#383a4d;box-shadow:inset 0 1px 0 #ffffff05,0 8px 28px #00000016}
+.wallet,.build-card,.combo{background:radial-gradient(ellipse at 100% 0,rgba(185,69,217,.48),transparent 66%),radial-gradient(ellipse at 0 0,rgba(99,129,246,.55),transparent 76%),linear-gradient(160deg,#292d50,#151322);border-color:#69658f;position:relative;isolation:isolate;overflow:hidden}
+.wallet::before,.build-card::before,.combo::before{content:'';position:absolute;inset:0;z-index:-1;pointer-events:none;background-image:radial-gradient(#090a1e44 .7px,transparent .9px);background-size:4px 4px;opacity:.45}
+.wallet-label,.wallet p,.build-card p,.combo p,.combo small{color:#d1cfe6}.wallet .big-number{font-weight:800}.wallet .big-number span{color:#c7c5e4}.wallet-foot{border-color:#ffffff26}
+.orbit,.combo-mult{color:#d6b0ff}.combo-mult{font-weight:800}.combo .eyebrow{color:#d1c6ef}
+.combo .leg{border:0;align-items:center;padding:12px 0;position:relative}.combo .leg-num{border:2px solid #9995c177;background:#282740;color:#e2d9ff;width:29px;height:29px;min-width:29px;line-height:25px;z-index:1}
+.combo .leg-body{padding:14px 16px;border-radius:20px;background:linear-gradient(110deg,#ffffff16,#d7b1ff1c);border:1px solid #ffffff0c}.combo .leg-body b{font-size:16px;font-weight:750}.combo .leg-odds{color:#e4d4ff;font-size:20px}
+.combo-summary{padding:18px 0;border-top:1px solid #ffffff25;border-bottom:1px solid #ffffff25}.combo-summary strong{font-size:23px;font-weight:800}.combo .actions button,.combo .actions a{background:#15132170;border-color:#aaa1d64d}.combo .actions .primary{background:linear-gradient(115deg,#4262cf,#7944b3)}
+.market{border-radius:24px}.market h3{font-size:16px;font-weight:750}.outcome{padding:12px;margin:8px 0;border:1px solid #ffffff0a;border-radius:16px;background:#ffffff06}.outcome .name{font-size:14px}.price.fav{color:#c4b7ff}.price{padding:4px 7px;border-radius:10px;background:#ffffff08}
+.target{background:#191c2c;border-color:#41415a;border-radius:18px}.target.selected{background:linear-gradient(135deg,#344781,#653c80);border-color:#b4a1ef;box-shadow:0 0 22px #8b63e520}.target.selected strong{color:#f1deff}.target.selected span{color:#ded7ef}
+input,select,textarea{background:#10131f;border-color:#43435b;border-radius:13px}input:focus,select:focus,textarea:focus{outline:2px solid #a392ef;outline-offset:2px}
+.progress{background:#333449}.progress span,.mini-bar i{background:linear-gradient(90deg,#6986ff,#c574e8)}
+.payment{background:linear-gradient(130deg,#292a44,#302339);border-color:#514768}.payment p{color:#cac4db}
+.pill{border-color:#5b5874;color:#c9c5df;border-radius:10px}.pill.good{background:#16362e;color:#92eac4;border-color:#346756}.pill.warn{background:#392f23;color:#f4d39b;border-color:#6d5636}
+.bet-row{border-color:#424052}.bet-row h3{font-size:16px}.goal-icon{background:#ffffff06;border-color:#514b70;color:#cbb8ff}
+.notice.info{background:#23233d;color:#d1cbff;border-color:#53507d}.research-team{background:#121421}.plot-empty{border-color:#46405e}
+dialog{background:linear-gradient(150deg,#232439,#141521);border-color:#686082;box-shadow:0 30px 100px #000b}dialog::backdrop{background:#05060cce}
+#toast{background:#302b49;color:#eee5ff;border-color:#81719f}
+@media(max-width:800px){#bottom-nav{left:12px;right:12px;bottom:calc(10px + env(safe-area-inset-bottom));padding:7px 5px;border:1px solid #4c4963;border-radius:29px;background:#151622ed;box-shadow:0 8px 35px #0008;backdrop-filter:blur(20px)}#bottom-nav a{border-radius:21px;min-height:52px}#bottom-nav a.active{background:linear-gradient(125deg,#3d4676,#523666);color:#f2eaff}main{padding-bottom:calc(125px + env(safe-area-inset-bottom))}}
+@media(max-width:560px){.card{border-radius:24px}.combo .leg{gap:9px}.combo .leg-body{padding:12px}.combo .leg-body b{font-size:14px;overflow-wrap:anywhere}.combo .leg-odds{font-size:16px}.combo-summary strong{font-size:20px}.combo .leg-num{min-width:25px;width:25px;height:25px;line-height:21px}.wallet{min-height:250px}.actions button{min-height:44px}}
+@media(prefers-reduced-transparency:reduce){#bottom-nav,header{background:#171925;backdrop-filter:none}}
