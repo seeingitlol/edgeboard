@@ -5,14 +5,28 @@ export const uid = () => crypto.randomUUID();
 export const iso = () => new Date().toISOString();
 export const amount = value => { if(value === null || value === undefined || value === '') return null; const n=Number(typeof value==='object'?value.value:value); return Number.isFinite(n)?n:null; };
 export const prob = value => {const n=amount(value); return n!==null && n>0 && n<1?n:null;};
-export const initialState = () => ({version:VERSION,revision:0,settings:{stake:500,riskPercent:20,dailyLoss:1000,lowBalance:500,cashoutAt:10000,cashoutAmount:5000,overallGoal:500000,proxy:'',sheetsUrl:'',notifications:false,maxPages:20,maxLegs:6,requireResearch:false,minDepth:0,maxSpread:.08},bets:[],cash:[],combos:[],branches:[],transfers:[],goals:[{id:'big-bear',name:'Big Bear trip',target:120000},{id:'iphone',name:'New iPhone',target:120000},{id:'shopping',name:'Shopping & food',target:80000}],incoming:{id:'nov-payment',expected:90000,due:'2026-11-05T08:00:00Z',received:0,receivedAt:null},outbox:[],syncAt:null});
+export const initialState = () => ({version:VERSION,revision:0,settings:{stake:500,riskPercent:20,dailyLoss:1000,lowBalance:500,cashoutAt:10000,cashoutAmount:5000,overallGoal:500000,proxy:'',sheetsUrl:'',notifications:false,maxPages:20,maxLegs:6,requireResearch:false,minDepth:0,maxSpread:.08},bets:[],cash:[],combos:[],branches:[],transfers:[],walletSnapshots:[],goals:[{id:'big-bear',name:'Big Bear trip',target:120000},{id:'iphone',name:'New iPhone',target:120000},{id:'shopping',name:'Shopping & food',target:80000}],incoming:{id:'nov-payment',expected:90000,due:'2026-11-05T08:00:00Z',received:0,receivedAt:null},outbox:[],syncAt:null});
+export function betResult(b){return b.status==='pending'?'pending':b.payout>b.stake?'won':b.payout<b.stake?'lost':'break-even';}
+export function correctInitialDeposit(s,n){
+ positive(n,'Deposit');const first=s.cash.filter(c=>c.kind==='deposit').sort((a,b)=>a.at.localeCompare(b.at))[0];
+ if(!first)throw new Error('No initial deposit is recorded.');
+ if(first.amount===n)return;
+ s.corrections=s.corrections||[];s.corrections.push({id:uid(),at:iso(),kind:'deposit-correction',cashId:first.id,previous:first.amount,amount:n});first.amount=n;
+}
+export function recordWalletSnapshot(s,{available,positions,total,at=iso()}){
+ for(const [label,n] of [['Available cash',available],['Open positions',positions],['Total account value',total]])if(!Number.isSafeInteger(n)||n<0)throw new Error(`${label} must be a non-negative amount in cents.`);
+ if(!Number.isFinite(Date.parse(at)))throw new Error('Enter a valid wallet snapshot time.');
+ if(Math.abs(available+positions-total)>2)throw new Error('Available cash plus open positions must equal total account value (within 2¢).');
+ s.walletSnapshots=s.walletSnapshots||[];const snap={id:uid(),at,available,positions,total};s.walletSnapshots.push(snap);return snap;
+}
+export function latestWalletSnapshot(s){return [...(s.walletSnapshots||[])].sort((a,b)=>b.at.localeCompare(a.at))[0]||null;}
 export function metrics(s){
- const settled=s.bets.filter(b=>b.status!=='pending'), resolved=settled.filter(b=>['won','lost'].includes(b.status));
+ const settled=s.bets.filter(b=>b.status!=='pending'), resolved=settled.filter(b=>['won','lost'].includes(betResult(b)));
  const staked=s.bets.reduce((a,b)=>a+b.stake,0), payouts=settled.reduce((a,b)=>a+b.payout,0), settledStake=settled.reduce((a,b)=>a+b.stake,0);
  const deposited=s.cash.filter(x=>x.kind==='deposit').reduce((a,b)=>a+b.amount,0),withdrawn=s.cash.filter(x=>x.kind==='withdrawal').reduce((a,b)=>a+b.amount,0);
  const bankroll=deposited-withdrawn-staked+payouts, reserved=s.branches.filter(b=>b.status==='ready').reduce((a,b)=>a+b.stake,0);
- let run=0,bestWin=0,bestLoss=0; for(const b of [...resolved].sort((a,b)=>a.settledAt.localeCompare(b.settledAt))){run=b.status==='won'?(run>0?run+1:1):(run<0?run-1:-1);bestWin=Math.max(bestWin,run);bestLoss=Math.max(bestLoss,-run);}
- return {bankroll,available:bankroll-reserved,reserved,deposited,withdrawn,staked,payouts,profit:payouts-settledStake,settledStake,losses:settled.reduce((a,b)=>a+Math.max(0,b.stake-b.payout),0),won:resolved.filter(b=>b.status==='won').length,lost:resolved.filter(b=>b.status==='lost').length,pending:s.bets.filter(b=>b.status==='pending').length,cashedOut:settled.filter(b=>b.status==='cashed-out').length,roi:settledStake?(payouts-settledStake)/settledStake:null,winRate:resolved.length?resolved.filter(b=>b.status==='won').length/resolved.length:null,run,bestWin,bestLoss};
+ let run=0,bestWin=0,bestLoss=0; for(const b of [...resolved].sort((a,b)=>a.settledAt.localeCompare(b.settledAt))){run=betResult(b)==='won'?(run>0?run+1:1):(run<0?run-1:-1);bestWin=Math.max(bestWin,run);bestLoss=Math.max(bestLoss,-run);}
+ return {pendingStake:s.bets.filter(b=>b.status==='pending').reduce((a,b)=>a+b.stake,0),breakEven:settled.filter(b=>betResult(b)==='break-even').length,bankroll,available:bankroll-reserved,reserved,deposited,withdrawn,staked,payouts,profit:payouts-settledStake,settledStake,losses:settled.reduce((a,b)=>a+Math.max(0,b.stake-b.payout),0),won:resolved.filter(b=>betResult(b)==='won').length,lost:resolved.filter(b=>betResult(b)==='lost').length,pending:s.bets.filter(b=>b.status==='pending').length,cashedOut:settled.filter(b=>b.status==='cashed-out').length,roi:settledStake?(payouts-settledStake)/settledStake:null,winRate:resolved.length?resolved.filter(b=>betResult(b)==='won').length/resolved.length:null,run,bestWin,bestLoss};
 }
 function positive(n,label){if(!Number.isSafeInteger(n)||n<=0)throw new Error(`${label} must be a positive amount in cents.`);}
 export function deposit(s,n){positive(n,'Deposit');s.cash.push({id:uid(),at:iso(),kind:'deposit',amount:n});}
@@ -40,6 +54,17 @@ export function settleBet(s,id,status,payout){
  b.status=status;b.payout=payout;b.settledAt=iso();
  const br=s.branches.find(x=>x.betId===id);if(br){br.status=status;br.payout=payout;}
  return b;
+}
+export function correctPendingBet(s,id,input){
+ const b=s.bets.find(x=>x.id===id);if(!b)throw new Error('Wager not found.');if(b.status!=='pending')throw new Error('Only a pending wager can be corrected.');
+ positive(input.stake,'Stake');positive(input.potential,'Potential payout');if(!Number.isFinite(input.multiplier)||input.multiplier<1)throw new Error('Enter the accepted multiplier.');
+ if(!Array.isArray(input.selections)||input.selections.length<2||input.selections.some(x=>!String(x).trim()))throw new Error('Enter at least two selected players or teams.');
+ if(!Number.isFinite(Date.parse(input.placedAt)))throw new Error('Enter a valid placement date.');
+ const branch=s.branches.find(x=>x.betId===id);if(branch&&input.stake!==b.stake)throw new Error('Release or reconcile this ticket’s staking branch before changing its stake.');
+ if(input.stake-b.stake>metrics(s).available)throw new Error('Corrected stake exceeds confirmed available funds.');
+ const previous={stake:b.stake,potential:b.potential,multiplier:b.multiplier,placedAt:b.placedAt,selections:b.legs.map(l=>l.selection)};
+ b.stake=input.stake;b.potential=input.potential;b.multiplier=input.multiplier;b.placedAt=input.placedAt;b.legs=input.selections.map((selection,i)=>({...b.legs[i],selection:String(selection).trim(),sport:b.legs[i]?.sport||input.sport||'Unspecified',sportName:b.legs[i]?.sportName||input.sport||'Unspecified'}));
+ s.corrections=s.corrections||[];s.corrections.push({id:uid(),at:iso(),kind:'pending-wager-correction',betId:id,previous,updated:{stake:b.stake,potential:b.potential,multiplier:b.multiplier,placedAt:b.placedAt,selections:b.legs.map(l=>l.selection)}});return b;
 }
 export function startBranch(s,stake){positive(stake,'Branch stake');if(stake>metrics(s).available)throw new Error('Not enough available funds.');const b={id:uid(),parent:null,level:1,stake,status:'ready',payout:0};s.branches.push(b);return b;}
 export function splitBranch(s,id,allocations,maxLevels=10){
@@ -153,13 +178,15 @@ export function settlementEstimate(legs,potential,settlements){
 }
 export function validateBackup(s){
  if(!s||s.version!==VERSION)throw new Error('Unsupported backup version.');
- for(const key of ['bets','cash','goals','combos','transfers','branches'])if(!Array.isArray(s[key]))throw new Error('Invalid backup: '+key);
+ if(!Array.isArray(s.walletSnapshots))s.walletSnapshots=[];
+ for(const key of ['bets','cash','goals','combos','transfers','branches','walletSnapshots'])if(!Array.isArray(s[key]))throw new Error('Invalid backup: '+key);
  const check=(value,key='')=>{if(value==null)return;if(Array.isArray(value)){value.forEach(v=>check(v,key));return;}if(typeof value==='object'){Object.entries(value).forEach(([k,v])=>check(v,k));return;}if(typeof value==='string'){if(['id','parent','betId','branchId','goalId','comboId'].includes(key)&&value&&!/^[a-zA-Z0-9_.:-]{1,200}$/.test(value))throw new Error('Invalid identifier in backup.');if(['url','source'].includes(key)&&/[:/]/.test(value)){let u;try{u=new URL(value);}catch{throw new Error('Invalid source URL.');}if(u.protocol!=='https:')throw new Error('Source URLs must use HTTPS.');}}};check(s);
  const ids=new Set();for(const b of s.bets){if(!b.id||ids.has(b.id)||!Number.isSafeInteger(b.stake)||b.stake<=0||!Number.isSafeInteger(b.payout)||b.payout<0||!['pending','won','lost','cashed-out','voided'].includes(b.status)||!Array.isArray(b.legs)||!b.placedAt)throw new Error('Invalid wager in backup.');ids.add(b.id);if(!Number.isFinite(Date.parse(b.placedAt))||(b.status!=='pending'&&!Number.isFinite(Date.parse(b.settledAt)))||!Number.isFinite(b.multiplier)||b.multiplier<1||b.legs.length<2)throw new Error('Invalid wager dates or odds.');if(b.status==='pending'&&b.payout!==0)throw new Error('Pending payout cannot be received.');}
  for(const x of s.cash){positive(x.amount,'Cash entry');if(!['deposit','withdrawal'].includes(x.kind))throw new Error('Invalid cash entry.');}
  for(const g of s.goals)positive(g.target,'Goal target');
  for(const t of s.transfers)positive(t.amount,'Transfer');
  for(const b of s.branches){positive(b.stake,'Branch');if(!Number.isInteger(b.level)||b.level<1||b.level>50||!Number.isSafeInteger(b.payout)||b.payout<0)throw new Error('Invalid branch.');}
+ for(const w of s.walletSnapshots){if(!w.id||!Number.isFinite(Date.parse(w.at))||![w.available,w.positions,w.total].every(n=>Number.isSafeInteger(n)&&n>=0)||Math.abs(w.available+w.positions-w.total)>2)throw new Error('Invalid wallet snapshot.');}
  if(!s.settings||!s.incoming)throw new Error('Incomplete backup.');
  if(!Number.isSafeInteger(s.incoming.received)||s.incoming.received<0)throw new Error('Invalid received payment.');
  return s;

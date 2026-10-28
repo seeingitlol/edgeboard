@@ -8,6 +8,9 @@
 
 .mini-bar{height:4px;background:var(--border);border-radius:4px;margin:5px 0 9px;overflow:hidden}.mini-bar i{display:block;height:100%;background:var(--green)}
 
+/* Clear pending and settled ledger groups */
+.ledger-summary{margin:20px 0}.ticket{padding:18px;margin:14px 0;border:1px solid var(--border);border-radius:20px;background:#ffffff04}.ticket-pending{border-left:4px solid var(--amber);background:linear-gradient(115deg,#f4d39b09,#ffffff03)}.ticket .pill{flex-shrink:0}.ticket .row>div{min-width:0}.ticket h3{overflow-wrap:anywhere}.ticket-amounts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:16px 0}.ticket-amounts small{display:block}.ticket-amounts strong{display:block;font-size:22px;margin-top:5px}.settled-heading{border-top:1px solid var(--border);padding-top:24px;margin-top:26px}@media(max-width:560px){.ticket{padding:14px}.ticket>.row{flex-wrap:wrap}.ticket-amounts{gap:8px}.ticket-amounts strong{font-size:18px}.ledger-summary .card-head{flex-wrap:wrap}}
+
 /* Edgeboard violet / blue theme. Visual changes only. */
 :root{--bg:#090c14;--panel:#191c28;--panel2:#242737;--border:#36384b;--muted:#b3b6ce;--text:#fafaff;--green:#b7b4ff;--good:#82e6bb;--bad:#ff94a8;--amber:#f4d39b;--radius:26px}
 body{background:radial-gradient(ellipse at 80% 0,rgba(103,52,166,.12),transparent 40%),#090c14}
@@ -38,4 +41,5 @@ dialog{background:linear-gradient(150deg,#232439,#141521);border-color:#686082;b
 #toast{background:#302b49;color:#eee5ff;border-color:#81719f}
 @media(max-width:800px){#bottom-nav{left:12px;right:12px;bottom:calc(10px + env(safe-area-inset-bottom));padding:7px 5px;border:1px solid #4c4963;border-radius:29px;background:#151622ed;box-shadow:0 8px 35px #0008;backdrop-filter:blur(20px)}#bottom-nav a{border-radius:21px;min-height:52px}#bottom-nav a.active{background:linear-gradient(125deg,#3d4676,#523666);color:#f2eaff}main{padding-bottom:calc(125px + env(safe-area-inset-bottom))}}
 @media(max-width:560px){.card{border-radius:24px}.combo .leg{gap:9px}.combo .leg-body{padding:12px}.combo .leg-body b{font-size:14px;overflow-wrap:anywhere}.combo .leg-odds{font-size:16px}.combo-summary strong{font-size:20px}.combo .leg-num{min-width:25px;width:25px;height:25px;line-height:21px}.wallet{min-height:250px}.actions button{min-height:44px}}
+.wallet-check{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px;margin:4px 0 18px;border:1px solid #7366a0;border-radius:16px;background:linear-gradient(120deg,rgba(76,101,207,.22),rgba(183,67,215,.2))}.wallet-check strong{display:block;font:700 24px Manrope,sans-serif;margin:5px 0}.wallet-check p{font-size:12px}@media(max-width:560px){.wallet-check{align-items:flex-start;flex-direction:column}.ledger-summary .card-head{align-items:flex-start;flex-direction:column}.ledger-summary .card-head .actions{width:100%}}
 @media(prefers-reduced-transparency:reduce){#bottom-nav,header{background:#171925;backdrop-filter:none}}

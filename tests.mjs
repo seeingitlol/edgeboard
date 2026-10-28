@@ -102,3 +102,31 @@ test('late callbacks from cancelled sport scans cannot overwrite the selected sp
  const {ui}=await uiHarness(api);const old=ui.scan();ui.sport('basketball');await ui.scan();release();await old;
  assert.equal(ui.snapshot().loadedSport,'basketball');assert.deepEqual(Array.from(ui.snapshot().markets,m=>m.sport),['basketball']);
 });
+
+test('initial deposit correction preserves wager history, profit and audit trail',()=>{
+ const s=E.initialState();E.deposit(s,2500);const b=E.logBet(s,placed());E.settleBet(s,b.id,'won',1500);const before=structuredClone(s.bets),profit=E.metrics(s).profit;
+ E.correctInitialDeposit(s,1500);assert.equal(E.metrics(s).deposited,1500);assert.equal(E.metrics(s).bankroll,2500);assert.equal(E.metrics(s).profit,profit);assert.deepEqual(s.bets,before);assert.equal(s.corrections[0].previous,2500);assert.equal(s.corrections[0].amount,1500);E.correctInitialDeposit(s,1500);assert.equal(s.corrections.length,1);assert.throws(()=>E.correctInitialDeposit(s,0));
+});
+test('cashouts are financial wins, losses or break-even without erasing settlement method',()=>{
+ const s=E.initialState();E.deposit(s,5000);
+ for(const payout of [700,300,500]){const b=E.logBet(s,placed());E.settleBet(s,b.id,'cashed-out',payout);}
+ const m=E.metrics(s);assert.equal(m.won,1);assert.equal(m.lost,1);assert.equal(m.breakEven,1);assert.equal(m.winRate,.5);assert.equal(m.cashedOut,3);assert.equal(m.profit,0);assert.ok(s.bets.every(b=>b.status==='cashed-out'));assert.deepEqual(s.bets.map(E.betResult),['won','lost','break-even']);
+});
+test('pending stakes are deducted once; gross potential payout never contributes to available cash',()=>{
+ const s=E.initialState();E.deposit(s,1500);const b=E.logBet(s,placed());let m=E.metrics(s);assert.equal(m.pendingStake,500);assert.equal(m.bankroll,1000);assert.equal(m.profit,0);assert.equal(E.betResult(b),'pending');E.settleBet(s,b.id,'cashed-out',300);m=E.metrics(s);assert.equal(m.pendingStake,0);assert.equal(m.bankroll,1300);assert.equal(m.profit,-200);assert.equal(m.lost,1);
+});
+test('wallet snapshots reconcile live cash and positions without changing ledger profit',()=>{
+ const s=E.initialState();E.deposit(s,1500);const before=E.metrics(s);
+ const w=E.recordWalletSnapshot(s,{available:2949,positions:1847,total:4796,at:'2026-10-28T08:38:00.000Z'});
+ assert.equal(E.latestWalletSnapshot(s),w);assert.deepEqual(E.metrics(s),before);assert.throws(()=>E.recordWalletSnapshot(s,{available:2949,positions:1847,total:4700}),/must equal/);
+ const copy=structuredClone(s);delete copy.walletSnapshots;assert.deepEqual(E.validateBackup(copy).walletSnapshots,[]);
+});
+test('pending ticket corrections preserve an audit trail and cannot overspend',()=>{
+ const s=E.initialState();E.deposit(s,1500);const b=E.logBet(s,placed());
+ E.correctPendingBet(s,b.id,{stake:652,potential:2812,multiplier:2812/652,placedAt:b.placedAt,selections:['Takacs','Gubi','Madarasz']});
+ assert.equal(b.stake,652);assert.equal(b.potential,2812);assert.deepEqual(b.legs.map(l=>l.selection),['Takacs','Gubi','Madarasz']);assert.equal(s.corrections[0].previous.stake,500);assert.equal(s.corrections[0].updated.stake,652);assert.throws(()=>E.correctPendingBet(s,b.id,{stake:2000,potential:4000,multiplier:2,placedAt:b.placedAt,selections:['A','B']}),/available/);
+ E.settleBet(s,b.id,'won',2812);assert.throws(()=>E.correctPendingBet(s,b.id,{stake:500,potential:1000,multiplier:2,placedAt:b.placedAt,selections:['A','B']}),/pending/);
+});
+test('Sheets financial classifications match app cashout accounting',async()=>{
+ const {readFile}=await import('node:fs/promises'),{runInNewContext}=await import('node:vm');const src=await readFile(new URL('./Sheets.gs',import.meta.url),'utf8');const output={};const props=new Map([['SYNC_SECRET','test'],['SHEET_ID','test']]);const ctx={console,PropertiesService:{getScriptProperties:()=>({getProperty:k=>props.get(k),setProperty:(k,v)=>props.set(k,v)})},LockService:{getScriptLock:()=>({waitLock(){},hasLock:()=>true,releaseLock(){}})},SpreadsheetApp:{openById:()=>({}),flush(){}},Utilities:{formatDate:d=>d.toISOString().slice(0,10)},ContentService:{MimeType:{JSON:'json'},createTextOutput:text=>({text,setMimeType(){return this;}})}};runInNewContext(src+'\nthis.put=(book,name,headers,rows)=>capture(name,headers,rows);',Object.assign(ctx,{capture:(name,headers,rows)=>output[name]={headers,rows}}));const s=E.initialState();E.deposit(s,2500);for(const payout of [700,300,500]){const b=E.logBet(s,placed());E.settleBet(s,b.id,'cashed-out',payout);}const reply=ctx.doPost({postData:{contents:JSON.stringify({secret:'test',id:'test',revision:1,snapshot:s})}});assert.equal(JSON.parse(reply.text).ok,true);assert.deepEqual(Array.from(output.BETS.rows,r=>r[16]),['win','loss','break-even']);assert.equal(output.PERFORMANCE.rows.find(r=>r[1]==='Win rate (profitable/losing)')[2],.5);
+});
