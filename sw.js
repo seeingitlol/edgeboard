@@ -1,5 +1,5 @@
-const CACHE='edgeboard-shell-ledger-v1';
-const SHELL=['./','./index.html','./styles.css','./app.js','./engine.js','./data.js','./store.js','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png'];
+const CACHE='edgeboard-shell-sources-v1';
+const SHELL=['./','./index.html','./styles.css','./app.js','./engine.js','./data.js','./store.js','./sources.js','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL))));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('edgeboard-shell-')&&k!==CACHE).map(k=>caches.delete(k))))));
 self.addEventListener('fetch',e=>{const u=new URL(e.request.url);if(e.request.method!=='GET'||u.origin!==self.location.origin||!SHELL.some(p=>new URL(p,self.registration.scope).pathname===u.pathname))return;

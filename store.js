@@ -1,3 +1,4 @@
+import {sourceLabel} from './sources.js';
 import {initialState,validateBackup} from './engine.js';
 let dbPromise;
 export function db(){if(!dbPromise)dbPromise=new Promise((resolve,reject)=>{const r=indexedDB.open('edgeboard-private',1);r.onupgradeneeded=()=>{for(const store of ['state','images','cache'])r.result.createObjectStore(store);};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});return dbPromise;}
@@ -18,4 +19,4 @@ export async function sync(s,onStatus=()=>{}){
  catch(e){onStatus('Sync queued: '+e.message);}finally{syncing=false;}
 }
 export function download(name,data,type='application/json'){const blob=new Blob([data],{type});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),2000);}
-export function csv(bets){const rows=[['Bet ID','Placed','Selections','Stake','Accepted multiplier','Potential payout','Status','Received payout','Realized PL','Settled','Sport']];for(const b of bets)rows.push([b.id,b.placedAt,b.legs.map(l=>l.selection).join(' | '),b.stake/100,b.multiplier,b.potential/100,b.status,b.payout/100,b.status==='pending'?'':(b.payout-b.stake)/100,b.settledAt||'',b.legs.map(l=>l.sportName||l.sport||'').join(' | ')]);return rows.map(row=>row.map(v=>'"'+String(v??'').replace(/^[=+@-]/,"'$&").replaceAll('"','""')+'"').join(',')).join('\r\n');}
+export function csv(bets){const rows=[['Bet ID','Placed','Selections','Stake','Accepted multiplier','Potential payout','Status','Received payout','Realized PL','Settled','Sport','Research source','Source URL']];for(const b of bets)rows.push([b.id,b.placedAt,b.legs.map(l=>l.selection).join(' | '),b.stake/100,b.multiplier,b.potential/100,b.status,b.payout/100,b.status==='pending'?'':(b.payout-b.stake)/100,b.settledAt||'',b.legs.map(l=>l.sportName||l.sport||'').join(' | '),sourceLabel(b),b.researchUrl||'']);return rows.map(row=>row.map(v=>'"'+String(v??'').replace(/^[=+@-]/,"'$&").replaceAll('"','""')+'"').join(',')).join('\r\n');}

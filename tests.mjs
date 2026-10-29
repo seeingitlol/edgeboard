@@ -1,3 +1,4 @@
+import {SOURCES,sourceKey,sourceLabel,sourceDetails,sourceGroups} from './sources.js';
 import test from 'node:test';import assert from 'node:assert/strict';
 import * as E from './engine.js';import {MarketAPI,ResearchAPI} from './data.js';import worker from './worker.js';
 const placed=()=>({stake:500,potential:1500,multiplier:3,placedAt:new Date().toISOString(),legs:[{selection:'Test Alpha'},{selection:'Test Beta'}]});
@@ -83,9 +84,9 @@ async function uiHarness(api){
  const {readFile}=await import('node:fs/promises');const {runInNewContext}=await import('node:vm');
  const nodes=new Map();const values={'#combo-stake':'5','#max-legs':'6','#max-spread':'8','#min-depth':'0'};
  const document={querySelector:selector=>{if(!nodes.has(selector))nodes.set(selector,{innerHTML:'',textContent:'',value:values[selector]||'',checked:false,classList:{add(){},remove(){}},showModal(){},addEventListener(){}});return nodes.get(selector);},addEventListener(){},querySelectorAll:()=>[]};
- const context={E,S:{save:async()=>{},write:async()=>{}},MarketAPI,ResearchAPI,document,window:{addEventListener(){}},location:{hash:'#combos'},console,Date,Intl,Map,Set,Math,Number,String,Array,Object,Promise,AbortController,structuredClone,setTimeout:()=>1,clearTimeout(){}};
+ const context={SOURCES,sourceKey,sourceLabel,sourceDetails,sourceGroups,E,S:{save:async()=>{},write:async()=>{}},MarketAPI,ResearchAPI,document,window:{addEventListener(){}},location:{hash:'#combos'},console,Date,Intl,Map,Set,Math,Number,String,Array,Object,Promise,AbortController,structuredClone,setTimeout:()=>1,clearTimeout(){}};
  const source=(await readFile(new URL('./app.js',import.meta.url),'utf8')).replace(/^import .*;\n/gm,'').replace(/void init\(\);\s*$/,'');
- runInNewContext(source+'\nthis.uiTest={scan,generate,setContext:(a)=>{state=E.initialState();api=a;research={research:async()=>({available:false,supported:false,summary:"Unavailable"})};catalog=[{slug:"tennis",name:"Tennis"},{slug:"basketball",name:"Basketball"}];filters.sport="tennis";filters.window="15";},sport:s=>filters.sport=s,snapshot:()=>({markets,combos,comboFeedback,loadedSport,scanning})};',context);
+ runInNewContext(source+'\nthis.uiTest={scan,generate,researchPage,betCard,bets,sourceFields,sourceState:s=>state=s,filterSource:key=>betSourceFilter=key,setContext:(a)=>{state=E.initialState();api=a;research={research:async()=>({available:false,supported:false,summary:"Unavailable"})};catalog=[{slug:"tennis",name:"Tennis"},{slug:"basketball",name:"Basketball"}];filters.sport="tennis";filters.window="15";},sport:s=>filters.sport=s,snapshot:()=>({markets,combos,comboFeedback,loadedSport,scanning})};',context);
  context.uiTest.setContext(api);return {ui:context.uiTest,nodes};
 }
 test('Generate waits for the selected sport second page and reuses the active scan',async()=>{
@@ -129,4 +130,34 @@ test('pending ticket corrections preserve an audit trail and cannot overspend',(
 });
 test('Sheets financial classifications match app cashout accounting',async()=>{
  const {readFile}=await import('node:fs/promises'),{runInNewContext}=await import('node:vm');const src=await readFile(new URL('./Sheets.gs',import.meta.url),'utf8');const output={};const props=new Map([['SYNC_SECRET','test'],['SHEET_ID','test']]);const ctx={console,PropertiesService:{getScriptProperties:()=>({getProperty:k=>props.get(k),setProperty:(k,v)=>props.set(k,v)})},LockService:{getScriptLock:()=>({waitLock(){},hasLock:()=>true,releaseLock(){}})},SpreadsheetApp:{openById:()=>({}),flush(){}},Utilities:{formatDate:d=>d.toISOString().slice(0,10)},ContentService:{MimeType:{JSON:'json'},createTextOutput:text=>({text,setMimeType(){return this;}})}};runInNewContext(src+'\nthis.put=(book,name,headers,rows)=>capture(name,headers,rows);',Object.assign(ctx,{capture:(name,headers,rows)=>output[name]={headers,rows}}));const s=E.initialState();E.deposit(s,2500);for(const payout of [700,300,500]){const b=E.logBet(s,placed());E.settleBet(s,b.id,'cashed-out',payout);}const reply=ctx.doPost({postData:{contents:JSON.stringify({secret:'test',id:'test',revision:1,snapshot:s})}});assert.equal(JSON.parse(reply.text).ok,true);assert.deepEqual(Array.from(output.BETS.rows,r=>r[16]),['win','loss','break-even']);assert.equal(output.PERFORMANCE.rows.find(r=>r[1]==='Win rate (profitable/losing)')[2],.5);
+});
+
+test('source attribution retains unknown history and isolates recorded outcomes',()=>{
+ assert.equal(sourceKey({source:'edgeboard'}),'edgeboard');
+ assert.equal(sourceKey({source:'manual'}),'unknown');
+ assert.equal(sourceKey({source:'manual',researchSource:'tennistonic'}),'tennistonic');
+ const groups=sourceGroups([{source:'edgeboard',status:'won',stake:500,payout:900},{researchSource:'tennistonic',status:'cashed-out',stake:500,payout:300},{researchSource:'tennistonic',status:'pending',stake:500,payout:0}]);
+ assert.deepEqual(groups.find(g=>g.key==='tennistonic'),{key:'tennistonic',label:'TennisTonic',total:2,pending:1,settled:1,profit:-200});
+ assert.equal(groups.find(g=>g.key==='edgeboard').profit,400);
+});
+test('source links require the stated publisher and reject unsafe URLs',()=>{
+ assert.equal(sourceDetails('tennistonic','https://tennistonic.com/example').researchUrl,'https://tennistonic.com/example');
+ for(const url of ['javascript:alert(1)','https://tennistonic.com.evil.test/a','https://evil.test/?site=tennistonic.com','https://user@tennistonic.com/a','https://www.tennisprediction.com/'])assert.throws(()=>sourceDetails('tennistonic',url));
+ assert.throws(()=>sourceDetails('made-up',''));
+ assert.equal(sourceDetails('mixed','').researchUrl,'');
+});
+
+test('research and My Bets render distinct source records while preserving wallet totals',async()=>{
+ const {ui}=await uiHarness({});
+ const s=E.initialState();E.deposit(s,2000);
+ const a=E.logBet(s,{...placed(),source:'edgeboard'});
+ const b=E.logBet(s,{...placed(),source:'manual',researchSource:'tennistonic',researchUrl:'https://tennistonic.com/article'});
+ E.settleBet(s,b.id,'cashed-out',300);ui.sourceState(s);
+ assert.match(ui.researchPage(),/TennisTonic/);assert.match(ui.researchPage(),/TennisPrediction/);
+ assert.match(ui.betCard(b),/SOURCE: TennisTonic/);
+ ui.filterSource('tennistonic');const html=ui.bets();
+ assert.match(html,/Showing 1 tickets/);assert.match(html,/Pending · 0/);assert.match(html,/Settled · 1/);
+ assert.ok(!html.includes('data-id="'+a.id+'"'));assert.match(html,/\$13\.00/);
+ const {csv}=await import('./store.js');assert.match(csv([b]),/"Research source","Source URL"/);
+ assert.match(csv([b]),/"TennisTonic","https:\/\/tennistonic.com\/article"/);
 });
